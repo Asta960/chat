@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitHub Issues Chat</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel-2: #1f2430;
+      --text: #e7eaf0;
+      --muted: #9aa3b2;
+      --mine: #2f81f7;
+      --friend: #2a2f3a;
+      --danger: #ff6b6b;
+      --warn: #f7b731;
+      --ok: #2ecc71;
+      --border: #2b3140;
+      --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    .app {
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      max-width: 900px;
+      margin: 0 auto;
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, #10131a 0%, #0f1115 100%);
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: rgba(23, 26, 33, 0.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .title-wrap { display: flex; flex-direction: column; gap: 4px; }
+    .title { font-size: 16px; font-weight: 700; }
+    .subtitle { font-size: 12px; color: var(--muted); }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+      background: #141924;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+    }
+
+    .dot.loading { background: var(--warn); }
+    .dot.online { background: var(--ok); }
+    .dot.error { background: var(--danger); }
+
+    .warning {
+      margin: 12px 16px 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(247, 183, 49, 0.35);
+      color: #ffd98f;
+      background: rgba(247, 183, 49, 0.08);
+      font-size: 13px;
+    }
+
+    .notice {
+      margin: 10px 16px 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 107, 107, 0.35);
+      color: #ffc1c1;
+      background: rgba(255, 107, 107, 0.08);
+      font-size: 13px;
+      display: none;
+      white-space: pre-wrap;
+    }
+
+    .chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scroll-behavior: smooth;
+    }
+
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      margin-top: 20%;
+      font-size: 14px;
+    }
+
+    .msg {
+      max-width: min(78%, 700px);
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid transparent;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      line-height: 1.35;
+    }
+
+    .msg.mine {
+      align-self: flex-end;
+      background: linear-gradient(145deg, #2f81f7, #226ad0);
+      border-color: rgba(255,255,255,0.1);
+    }
+
+    .msg.friend {
+      align-self: flex-start;
+      background: var(--friend);
+      border-color: var(--border);
+    }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+      font-size: 11px;
+      opacity: 0.9;
+    }
+
+    .author { font-weight: 600; }
+    .time { color: #d6dbe5; opacity: 0.85; }
+
+    .composer {
+      position: sticky;
+      bottom: 0;
+      z-index: 10;
+      display: flex;
+      gap: 10px;
+      padding: 12px;
+      border-top: 1px solid var(--border);
+      background: rgba(23, 26, 33, 0.92);
+      backdrop-filter: blur(8px);
+    }
+
+    .input {
+      flex: 1;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 0 14px;
+      outline: none;
+      font-size: 14px;
+      transition: border-color .2s, box-shadow .2s;
+    }
+
+    .input:focus {
+      border-color: #4b90ff;
+      box-shadow: 0 0 0 3px rgba(75, 144, 255, 0.18);
+    }
+
+    .send {
+      border: none;
+      min-width: 110px;
+      border-radius: 12px;
+      background: linear-gradient(145deg, #3b8cff, #2f6ee0);
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform .15s ease, filter .2s ease, opacity .2s;
+    }
+
+    .send:hover { filter: brightness(1.08); transform: translateY(-1px); }
+    .send:active { transform: translateY(0); }
+    .send:disabled { opacity: 0.65; cursor: not-allowed; }
+
+    @media (max-width: 640px) {
+      .app { border: none; }
+      .msg { max-width: 88%; }
+      .send { min-width: 92px; }
+      .title { font-size: 15px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="title-wrap">
+        <div class="title">GitHub Issues Chat</div>
+        <div class="subtitle" id="repoInfo">—</div>
+      </div>
+      <div class="status" id="status">
+        <span class="dot loading" id="statusDot"></span>
+        <span id="statusText">Загрузка...</span>
+      </div>
+    </header>
+
+    <div class="warning">⚠️ Токен зашит в код. Не делайте репозиторий публичным!</div>
+    <div class="notice" id="notice"></div>
+
+    <main class="chat" id="chat">
+      <div class="empty" id="empty">Сообщений пока нет</div>
+    </main>
+
+    <footer class="composer">
+      <input id="messageInput" class="input" type="text" placeholder="Введите сообщение..." maxlength="2000" />
+      <button id="sendBtn" class="send">Отправить</button>
+    </footer>
+  </div>
+
+  <script>
+    // ЗАПОЛНИ ЭТИ ДАННЫЕ ПЕРЕД ЗАПУСКОМ
+    const CONFIG = {
+      owner: 'Asta960',
+      repo: 'chat',
+      issueNumber: 1,
+      token: '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'
+    };
+
+    // ВНИМАНИЕ: хардкод токена опасен. Любой, кто увидит код, сможет использовать токен.
+    // Используйте приватный репозиторий и токен с минимальными правами (лучше fine-grained PAT).
+
+    const API_BASE = 'https://api.github.com';
+    const COMMENTS_URL = `${API_BASE}/repos/${CONFIG.owner}/${CONFIG.repo}/issues/${CONFIG.issueNumber}/comments`;
+
+    const chatEl = document.getElementById('chat');
+    const emptyEl = document.getElementById('empty');
+    const noticeEl = document.getElementById('notice');
+    const inputEl = document.getElementById('messageInput');
+    const sendBtnEl = document.getElementById('sendBtn');
+    const statusDotEl = document.getElementById('statusDot');
+    const statusTextEl = document.getElementById('statusText');
+    const repoInfoEl = document.getElementById('repoInfo');
+
+    let myLogin = null;
+    let isFetching = false;
+    let lastMessageId = null;
+
+    repoInfoEl.textContent = `${CONFIG.owner}/${CONFIG.repo} • Issue #${CONFIG.issueNumber}`;
+
+    function setStatus(type, text) {
+      statusDotEl.className = `dot ${type}`;
+      statusTextEl.textContent = text;
+    }
+
+    function showNotice(message) {
+      noticeEl.style.display = 'block';
+      noticeEl.textContent = message;
+    }
+
+    function hideNotice() {
+      noticeEl.style.display = 'none';
+      noticeEl.textContent = '';
+    }
+
+    function formatLocalTime(iso) {
+      return new Date(iso).toLocaleString();
+    }
+
+    function isNearBottom() {
+      const threshold = 80;
+      return chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < threshold;
+    }
+
+    function scrollToBottom() {
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    function getErrorMessage(status, bodyText) {
+      if (!navigator.onLine) {
+        return 'Нет интернета. Проверьте подключение и попробуйте снова.';
+      }
+      if (status === 401) {
+        return 'Ошибка 401: неверный токен или токен не имеет нужных прав.';
+      }
+      if (status === 403) {
+        const lower = (bodyText || '').toLowerCase();
+        if (lower.includes('rate limit')) {
+          return 'Лимит GitHub API исчерпан (403). Подождите или используйте другой токен.';
+        }
+        return 'Ошибка 403: доступ запрещен. Проверьте права токена к репозиторию.';
+      }
+      if (status === 404) {
+        return 'Ошибка 404: репозиторий или issue не найден. Проверьте owner/repo/issueNumber.';
+      }
+      if (status === 429) {
+        return 'Ошибка 429: слишком много запросов. Уменьшите частоту обновления.';
+      }
+      return `Ошибка ${status || ''}: ${bodyText || 'неизвестная ошибка API.'}`.trim();
+    }
+
+    async function githubRequest(url, options = {}) {
+      if (!navigator.onLine) {
+        const offlineErr = new Error('OFFLINE');
+        offlineErr.status = 0;
+        throw offlineErr;
+      }
+
+      const response = await fetch(url, {
+        method: options.method || 'GET',
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'Authorization': `Bearer ${CONFIG.token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          ...(options.headers || {})
+        },
+        body: options.body
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        const err = new Error(text || 'Request failed');
+        err.status = response.status;
+        err.bodyText = text;
+        throw err;
+      }
+
+      return response.json();
+    }
+
+    function renderMessages(messages) {
+      const shouldStick = isNearBottom() || lastMessageId === null;
+
+      chatEl.innerHTML = '';
+      if (!messages.length) {
+        emptyEl.style.display = 'block';
+        chatEl.appendChild(emptyEl);
+        return;
+      }
+
+      emptyEl.style.display = 'none';
+
+      for (const msg of messages) {
+        const isMine = myLogin && msg.user && msg.user.login === myLogin;
+        const wrapper = document.createElement('div');
+        wrapper.className = `msg ${isMine ? 'mine' : 'friend'}`;
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+
+        const author = document.createElement('span');
+        author.className = 'author';
+        author.textContent = msg.user?.login || 'unknown';
+
+        const time = document.createElement('span');
+        time.className = 'time';
+        time.textContent = formatLocalTime(msg.created_at);
+
+        meta.appendChild(author);
+        meta.appendChild(time);
+
+        const text = document.createElement('div');
+        text.textContent = msg.body || '';
+
+        wrapper.appendChild(meta);
+        wrapper.appendChild(text);
+        chatEl.appendChild(wrapper);
+      }
+
+      const newLastId = messages[messages.length - 1]?.id ?? null;
+      const hasNew = lastMessageId !== null && newLastId !== lastMessageId;
+      lastMessageId = newLastId;
+
+      if (shouldStick || hasNew) {
+        scrollToBottom();
+      }
+    }
+
+    async function loadCurrentUser() {
+      try {
+        const me = await githubRequest(`${API_BASE}/user`);
+        myLogin = me?.login || CONFIG.owner;
+      } catch {
+        myLogin = CONFIG.owner;
+      }
+    }
+
+    async function loadMessages() {
+      if (isFetching) return;
+      isFetching = true;
+      setStatus('loading', 'Синхронизация...');
+
+      try {
+        hideNotice();
+        const messages = await githubRequest(`${COMMENTS_URL}?per_page=100&sort=created&direction=asc`);
+        renderMessages(messages);
+        setStatus('online', 'Онлайн');
+      } catch (e) {
+        const msg = getErrorMessage(e.status, e.bodyText);
+        showNotice(msg);
+        setStatus('error', 'Ошибка');
+      } finally {
+        isFetching = false;
+      }
+    }
+
+    async function sendMessage() {
+      const text = inputEl.value.trim();
+      if (!text) return;
+
+      sendBtnEl.disabled = true;
+      setStatus('loading', 'Отправка...');
+
+      try {
+        hideNotice();
+        await githubRequest(COMMENTS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body: text })
+        });
+
+        inputEl.value = '';
+        await loadMessages();
+        setStatus('online', 'Онлайн');
+      } catch (e) {
+        const msg = getErrorMessage(e.status, e.bodyText);
+        showNotice(msg);
+        setStatus('error', 'Ошибка отправки');
+      } finally {
+        sendBtnEl.disabled = false;
+        inputEl.focus();
+      }
+    }
+
+    sendBtnEl.addEventListener('click', sendMessage);
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    window.addEventListener('online', () => {
+      hideNotice();
+      loadMessages();
+    });
+
+    window.addEventListener('offline', () => {
+      showNotice('Нет интернета. Сообщения временно недоступны.');
+      setStatus('error', 'Оффлайн');
+    });
+
+    (async function init() {
+      if (!CONFIG.owner || !CONFIG.repo || !CONFIG.issueNumber || !CONFIG.token) {
+        showNotice('Заполните CONFIG перед запуском.');
+        setStatus('error', 'Нет конфигурации');
+        return;
+      }
+
+      await loadCurrentUser();
+      await loadMessages();
+      setInterval(loadMessages, 5000);
+      inputEl.focus();
+    })();
+  </script>
+</body>
+</html>
