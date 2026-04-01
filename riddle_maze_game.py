@@ -22,29 +22,51 @@ import random
 import math
 import json
 import os
+import sys
+import time
 from collections import defaultdict
 from enum import Enum
 
-# Константы
-TILE_SIZE = 40
-MAZE_WIDTH = 21  # Нечетное число для алгоритма генерации
-MAZE_HEIGHT = 21
-SCREEN_WIDTH = MAZE_WIDTH * TILE_SIZE
-SCREEN_HEIGHT = MAZE_HEIGHT * TILE_SIZE + 100  # Место для интерфейса
-FPS = 60
+# Проверка доступности графического интерфейса
+USE_PYGAME = False
+try:
+    # Принудительно используем dummy драйвер для headless окружения
+    os.environ['SDL_VIDEODRIVER'] = 'dummy'
+    os.environ['DISPLAY'] = ''
+    
+    pygame.init()
+    USE_PYGAME = True
+except Exception as e:
+    print(f"Графический интерфейс недоступен ({e}). Запуск в текстовом режиме (ASCII).")
+    USE_PYGAME = False
 
-# Цвета
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-GRAY = (128, 128, 128)
-DARK_GRAY = (64, 64, 64)
-RED = (255, 0, 0)
-GREEN = (0, 255, 0)
-BLUE = (0, 0, 255)
-YELLOW = (255, 255, 0)
-PURPLE = (128, 0, 128)
-ORANGE = (255, 165, 0)
-CYAN = (0, 255, 255)
+if USE_PYGAME:
+    # Константы для графики
+    TILE_SIZE = 40
+    MAZE_WIDTH = 21  # Нечетное число для алгоритма генерации
+    MAZE_HEIGHT = 21
+    SCREEN_WIDTH = MAZE_WIDTH * TILE_SIZE
+    SCREEN_HEIGHT = MAZE_HEIGHT * TILE_SIZE + 100  # Место для интерфейса
+    FPS = 60
+    
+    # Цвета
+    BLACK = (0, 0, 0)
+    WHITE = (255, 255, 255)
+    GRAY = (128, 128, 128)
+    DARK_GRAY = (64, 64, 64)
+    RED = (255, 0, 0)
+    GREEN = (0, 255, 0)
+    BLUE = (0, 0, 255)
+    YELLOW = (255, 255, 0)
+    PURPLE = (128, 0, 128)
+    ORANGE = (255, 165, 0)
+    CYAN = (0, 255, 255)
+else:
+    # Константы для текстового режима
+    FPS = 5  # Скорость обновления в текстовом режиме
+    TILE_SIZE = 1
+    MAZE_WIDTH = 21
+    MAZE_HEIGHT = 21
 
 class Direction(Enum):
     UP = 0
@@ -321,12 +343,18 @@ class Game:
     """Основной класс игры"""
     
     def __init__(self):
-        pygame.init()
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Лабиринт Сфинкса - Обучающийся ИИ")
-        self.clock = pygame.time.Clock()
-        self.font = pygame.font.Font(None, 24)
-        self.small_font = pygame.font.Font(None, 18)
+        if USE_PYGAME:
+            pygame.init()
+            self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+            pygame.display.set_caption("Лабиринт Сфинкса - Обучающийся ИИ")
+            self.clock = pygame.time.Clock()
+            self.font = pygame.font.Font(None, 24)
+            self.small_font = pygame.font.Font(None, 18)
+        else:
+            self.screen = None
+            self.clock = None
+            self.font = None
+            self.small_font = None
         
         self.maze_generator = MazeGenerator()
         self.riddle_system = RiddleSystem()
@@ -591,6 +619,37 @@ class Game:
         running = True
         auto_reset_timer = 0
         
+        if not USE_PYGAME:
+            # Текстовый режим
+            print("\n=== Лабиринт Сфинкса (Текстовый режим) ===")
+            print("Обучение ИИ запущено. Нажмите Ctrl+C для остановки.")
+            
+            try:
+                while running:
+                    # Обновление ИИ
+                    if self.mode in ['ai_train', 'ai_watch']:
+                        self.update_ai()
+                    
+                    # Авто-рестарт после победы/поражения
+                    if self.win or self.game_over:
+                        auto_reset_timer += 1
+                        if auto_reset_timer > 2:  # Короткая пауза
+                            if self.mode == 'ai_train':
+                                print(f"Эпизод {self.training_episodes}: {'ПОБЕДА' if self.win else 'ПОРАЖЕНИЕ'} | Win Rate: {(self.successful_episodes/self.training_episodes)*100:.1f}%")
+                            self.reset_game()
+                            auto_reset_timer = 0
+                    
+                    time.sleep(1.0 / FPS)
+                    
+            except KeyboardInterrupt:
+                print("\nОстановка обучения...")
+                running = False
+            
+            # Сохранение модели при выходе
+            self.ai.save_model()
+            return
+        
+        # Графический режим (Pygame)
         while running:
             self.clock.tick(FPS)
             
